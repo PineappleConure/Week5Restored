@@ -24,9 +24,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import algonquin.cst2335.wang0467.MainActivity;
-import algonquin.cst2335.wang0467.R;
-
 @LargeTest
 @RunWith(AndroidJUnit4.class)
 public class MainActivityTest {
