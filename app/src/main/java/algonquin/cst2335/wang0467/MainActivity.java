@@ -1,120 +1,109 @@
 package algonquin.cst2335.wang0467;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.TextView;
+import android.view.View;
+import android.widget.ImageView;
 import android.widget.Toast;
-
 import androidx.appcompat.app.AppCompatActivity;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.toolbox.ImageRequest;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.android.volley.toolbox.Volley;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import android.util.Log;
+import algonquin.cst2335.wang0467.databinding.ActivityMainBinding;
 
-/**
- * MainActivity is the primary activity for this application.
- * It provides a user interface for password input and validation.
- * Through this interface, users can enter a password, which will then be
- * checked against certain complexity requirements. Feedback is provided
- * to the user based on the validity of the entered password.
- *
- * @author Linna Wang - 040755479
- * @version 1.0
- */
 public class MainActivity extends AppCompatActivity {
-
-    /**
-     * This TextView displays feedback messages to the user about the password's complexity.
-     */
-    private TextView tv = null;
-
-    /**
-     * This TextView displays feedback messages to the user about the password's complexity.
-     */
-    private EditText et = null;
-
-    /**
-     * This Button triggers the password complexity check when clicked.
-     */
-    private Button btn = null;
+    protected String cityName;
+    protected RequestQueue queue;
+    protected ImageView weatherIconImageView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
-        tv = findViewById(R.id.textView);
-        et = findViewById(R.id.password_EditText);
-        btn = findViewById(R.id.login_btn);
+        queue = Volley.newRequestQueue(this);
+        ActivityMainBinding binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
 
-        btn.setOnClickListener( clk -> {
-            String password = et.getText().toString();
-            if (checkPasswordComplexity(password)) {
-                tv.setText("Your password meets the requirements");
-            } else {
-                tv.setText("You shall not pass!");
-            };
-        });
-    }
+        weatherIconImageView = binding.icon;
 
-    /**
-     * This function is to check the password complexity.
-     *
-     * @param pw The String object that we are checking
-     * @return Returns true if the password meets the complexity requirements, else false
-     */
-    boolean checkPasswordComplexity(String pw) {
-        boolean foundUpperCase, foundLowerCase, foundNumber, foundSpecial;
-        foundUpperCase = foundLowerCase = foundNumber = foundSpecial = false;
-
-        for (int i = 0; i < pw.length(); i++) {
-            char c = pw.charAt(i);
-
-            if (Character.isUpperCase(c)) {
-                foundUpperCase = true;
-            } else if (Character.isLowerCase(c)) {
-                foundLowerCase = true;
-            } else if (Character.isDigit(c)) {
-                foundNumber = true;
-            } else if (isSpecialCharacter(c)) {
-                foundSpecial = true;
+        binding.forcastButton.setOnClickListener(click -> {
+            cityName = binding.cityTextField.getText().toString();
+            String stringURL = null;
+            try {
+                stringURL = "https://api.openweathermap.org/data/2.5/weather?q="
+                        + URLEncoder.encode(cityName, "UTF-8")
+                        + "&appid=2fb132343b663b89e1d0ca8a36aeedf5&units=metric";
+            } catch (UnsupportedEncodingException e) {
+                throw new RuntimeException(e);
             }
-        }
 
-        if (!foundUpperCase) {
-            Toast.makeText(this, "Your password does not have an upper case letter", Toast.LENGTH_LONG).show();
-            return false;
-        } else if (!foundLowerCase) {
-            Toast.makeText(this, "Your password does not have a lower case letter", Toast.LENGTH_LONG).show();
-            return false;
-        } else if (!foundNumber) {
-            Toast.makeText(this, "Your password does not have a number", Toast.LENGTH_LONG).show();
-            return false;
-        } else if (!foundSpecial) {
-            Toast.makeText(this, "Your password does not have a special symbol", Toast.LENGTH_LONG).show();
-            return false;
-        } else {
-            return true;
-        }
-    }
+            JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, stringURL, null,
+                    (response) -> {
+                        try {
+                            JSONArray weatherArray = response.getJSONArray("weather");
+                            JSONObject position0 = weatherArray.getJSONObject(0);
+                            String iconName = position0.getString("icon");
+                            String fileName = iconName + ".png";
+                            File file = new File(getFilesDir(), fileName);
 
-    /**
-     * This function checks if the given character is a special character.
-     *
-     * @param c The character to check
-     * @return Returns true if the character is a special character, else false
-     */
-    boolean isSpecialCharacter(char c) {
-        switch (c) {
-            case '#':
-            case '$':
-            case '%':
-            case '^':
-            case '&':
-            case '*':
-            case '!':
-            case '@':
-            case '?':
-                return true;
-            default:
-                return false;
-        }
+                            if (!file.exists()) {
+                                String imageUrl = "http://openweathermap.org/img/w/" + iconName + ".png";
+                                ImageRequest imgReq = new ImageRequest(imageUrl, bitmap -> {
+                                    weatherIconImageView.setImageBitmap(bitmap);
+                                    try (FileOutputStream fOut = openFileOutput(fileName, MODE_PRIVATE)) {
+                                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, fOut);
+                                    } catch (IOException e) {
+                                        Log.e("MainActivity", "Error saving image", e);
+                                    }
+                                }, 1024, 1024, ImageView.ScaleType.CENTER, Bitmap.Config.RGB_565,
+                                        error -> Log.e("MainActivity", "Image Request Error: " + error.getMessage()));
+
+                                queue.add(imgReq);
+                            } else {
+                                Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+                                weatherIconImageView.setImageBitmap(bitmap);
+                            }
+
+                            JSONObject mainObject = response.getJSONObject("main");
+                            double current = mainObject.getDouble("temp");
+                            double min = mainObject.getDouble("temp_min");
+                            double max = mainObject.getDouble("temp_max");
+                            int humidity = mainObject.getInt("humidity");
+
+                            binding.temp.setText("The current temperature is " + current);
+                            binding.minTemp.setText("The min temperature is " + min);
+                            binding.maxTemp.setText("The max temperature is " + max);
+                            binding.humidity.setText("The humidity is " + humidity);
+                            binding.description.setText(position0.getString("description"));
+
+                            binding.temp.setVisibility(View.VISIBLE);
+                            binding.minTemp.setVisibility(View.VISIBLE);
+                            binding.maxTemp.setVisibility(View.VISIBLE);
+                            binding.humidity.setVisibility(View.VISIBLE);
+                            binding.description.setVisibility(View.VISIBLE);
+                            binding.icon.setVisibility(View.VISIBLE);
+
+                        } catch (JSONException e) {
+                            Log.e("MainActivity", "JSON parsing error", e);
+                        }
+                    },
+                    error -> Log.e("MainActivity", "Request Error: " + error.getMessage())
+            );
+            queue.add(request);
+        });
     }
 }
